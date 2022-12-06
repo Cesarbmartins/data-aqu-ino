@@ -11,7 +11,7 @@ const SERVIDOR_PORTA = 3300;
 // configure a linha abaixo caso queira que os dados capturados sejam inseridos no banco de dados.
 // false -> nao insere
 // true -> insere
-const HABILITAR_OPERACAO_INSERIR = false;
+const HABILITAR_OPERACAO_INSERIR = true;
 
 // altere o valor da variável AMBIENTE para o valor desejado:
 // API conectada ao banco de dados remoto, SQL Server -> 'producao'
@@ -21,7 +21,9 @@ const AMBIENTE = 'desenvolvimento';
 const serial = async (
     valoresDht11Umidade,
     valoresDht11Temperatura,
-
+    valoresLuminosidade,
+    valoresLm35Temperatura,
+    valoresChave
 ) => {
     let poolBancoDados = ''
 
@@ -33,7 +35,7 @@ const serial = async (
                 host: 'localhost',
                 user: 'aluno',
                 password: 'sptech',
-                database: 'thermodata'
+                database: 'Thermodata'
             }
         ).promise();
     } else if (AMBIENTE == 'producao') {
@@ -62,10 +64,15 @@ const serial = async (
         const valores = data.split(';');
         const dht11Umidade = parseFloat(valores[0]);
         const dht11Temperatura = parseFloat(valores[1]);
-     
+        const lm35Temperatura = parseFloat(valores[2]);
+        const luminosidade = parseFloat(valores[3]);
+        const chave = parseInt(valores[4]);
 
         valoresDht11Umidade.push(dht11Umidade);
         valoresDht11Temperatura.push(dht11Temperatura);
+        valoresLuminosidade.push(luminosidade);
+        valoresLm35Temperatura.push(lm35Temperatura);
+        valoresChave.push(chave);
 
         if (HABILITAR_OPERACAO_INSERIR) {
             if (AMBIENTE == 'producao') {
@@ -79,11 +86,11 @@ const serial = async (
                 // CREDENCIAIS DO BANCO REMOTO - SQL SERVER
                 // Importante! você deve ter criado o usuário abaixo com os comandos presentes no arquivo
                 // "script-criacao-usuario-sqlserver.sql", presente neste diretório.
-                const connStr = "Server=;Database=bd-acquatec;User Id=usuarioParaAPIArduino_datawriter;Password=#Gf_senhaParaAPI;";
+                const connStr = "Server=thermodata.database.windows.net;Database=Thermodata;User Id=admin-thermodata;Password=#Gfgrupo1;";
 
                 function inserirComando(conn, sqlquery) {
                     conn.query(sqlquery);
-                    console.log("valores inseridos no banco: ", dht11Temperatura + ", " +  dht11Umidade)
+                    console.log("valores inseridos no banco: ", dht11Umidade + ", " + dht11Temperatura + ", " + luminosidade + ", " + lm35Temperatura + ", " + chave)
                 }
 
                 sql.connect(connStr)
@@ -98,10 +105,10 @@ const serial = async (
                 // Este insert irá inserir dados de fk_aquario id=1 (fixo no comando do insert abaixo)
                 // >> você deve ter o aquario de id 1 cadastrado.
                 await poolBancoDados.execute(
-                    'INSERT INTO metrica ( temperaturaAtual, umidadeAtual,fkSensor) VALUES (?, ?, now(), 1)',
+                    'INSERT INTO metrica ( temperaturaAtual,umidadeAtual,dtHora, fkSensor) VALUES (?, ?, now(), 1)',
                     [dht11Umidade, dht11Temperatura]
                 );
-                console.log("valores inseridos no banco: ", dht11Umidade + ", " + dht11Temperatura)
+                console.log("valores inseridos no banco: ", dht11Umidade + ", " + dht11Temperatura + ", " + luminosidade + ", " + lm35Temperatura + ", " + chave)
 
             } else {
                 throw new Error('Ambiente não configurado. Verifique o arquivo "main.js" e tente novamente.');
@@ -118,7 +125,9 @@ const serial = async (
 const servidor = (
     valoresDht11Umidade,
     valoresDht11Temperatura,
-    
+    valoresLuminosidade,
+    valoresLm35Temperatura,
+    valoresChave
 ) => {
     const app = express();
     app.use((request, response, next) => {
@@ -135,20 +144,35 @@ const servidor = (
     app.get('/sensores/dht11/temperatura', (_, response) => {
         return response.json(valoresDht11Temperatura);
     });
+    app.get('/sensores/luminosidade', (_, response) => {
+        return response.json(valoresLuminosidade);
+    });
+    app.get('/sensores/lm35/temperatura', (_, response) => {
+        return response.json(valoresLm35Temperatura);
+    });
+    app.get('/sensores/chave', (_, response) => {
+        return response.json(valoresChave);
+    });
 }
 
 (async () => {
     const valoresDht11Umidade = [];
     const valoresDht11Temperatura = [];
-   
+    const valoresLuminosidade = [];
+    const valoresLm35Temperatura = [];
+    const valoresChave = [];
     await serial(
         valoresDht11Umidade,
         valoresDht11Temperatura,
-      
+        valoresLuminosidade,
+        valoresLm35Temperatura,
+        valoresChave
     );
     servidor(
         valoresDht11Umidade,
         valoresDht11Temperatura,
-       
+        valoresLuminosidade,
+        valoresLm35Temperatura,
+        valoresChave
     );
 })();
